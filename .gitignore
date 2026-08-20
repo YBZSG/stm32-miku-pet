@@ -1,0 +1,25 @@
+# Local WiFi credentials for the STM32 Codex Pet.
+miku_pet/User/pet_wifi_config.h
+
+# Local tooling and temporary research material.
+__pycache__/
+.codex-remote-attachments/
+tmp/
+board-page19.png
+board-resource-map.png
+
+# Vendor archives and extracted reference packages are not project source.
+/WiFi_蓝牙模块/
+/音频模块/
+/屏幕模块/
+miku_pet/.tmp_vs1053_ref/
+miku_pet/third_party/
+
+# Runtime state and generated build products.
+miku_pet/runtime/
+miku_pet/Output/
+miku_pet/Listing/
+*.log
+*.uvoptx
+*.uvguix.*
+*.bak
