@@ -7,6 +7,7 @@
 #include "./lcd/bsp_xpt2046_lcd.h"
 #include "./radar/radar.h"
 #include "./wifi/esp8266_dashboard.h"
+#include "./sensor/mq135.h"
 #include <stdio.h>
 
 static void Bluetooth_USART_Config(void)
@@ -37,6 +38,7 @@ int main(void)
     SysTick_Init();
     USART_Config();
     Bluetooth_USART_Config();
+    MQ135_Init();
     ILI9341_Init();
     LCD_SetBackColor(0xF7BE);
     ILI9341_Clear(0, 0, LCD_X_LENGTH, LCD_Y_LENGTH);
@@ -49,8 +51,11 @@ int main(void)
     PetPlayer_Init();
     PetPlayer_SetState(PET_IDLE);
     PetPlayer_Update(); /* 立刻绘制初音初始画面 */
-    PetPlayer_PlayVoice(VOICE_BOOT); /* 开机播报: こんにちは、私の名前は初音ミクです! */
+    ILI9341_BackLed_Control(ENABLE); /* show the LCD only after frame 0 is ready */
+    PetPlayer_PlayVoice(VOICE_BOOT); /* 开机播�? こんにちは、私の名前は初音ミクです! */
     ESP8266_DashboardInit();
-    while (1)
+    while (1) {
         PetPlayer_Update();
+        MQ135_Update();
+    }
 }

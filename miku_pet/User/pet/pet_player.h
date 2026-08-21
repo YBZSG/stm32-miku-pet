@@ -22,7 +22,10 @@ typedef enum {
     DASHBOARD_MODE_AI = 1,
     DASHBOARD_MODE_WEATHER = 2,
     DASHBOARD_MODE_MESSAGE = 3,
-    DASHBOARD_MODE_GEEK = 4
+    DASHBOARD_MODE_GEEK = 4,
+    DASHBOARD_MODE_AIR = 5,
+    DASHBOARD_MODE_DHT = 6,
+    DASHBOARD_MODE_MPU = 7
 } DashboardMode;
 
 uint8_t PetPlayer_Init(void);
@@ -34,6 +37,9 @@ void PetPlayer_SetWifiProbe(uint8_t index, uint32_t baud, uint16_t rx_count, uin
 void PetPlayer_SetWifiProbeHex(uint8_t index, const uint8_t *bytes, uint8_t count);
 void PetPlayer_SetState(PetState state);
 void PetPlayer_SetMode(DashboardMode mode);
+void PetPlayer_RefreshAirPage(void);
+void PetPlayer_RefreshDHTPage(void);
+void PetPlayer_RefreshMPUPage(void);
 void PetPlayer_PlayVoice(uint8_t voice_id);
 void PetPlayer_Update(void);
 void PetPlayer_PollSerial(void);
