@@ -283,7 +283,7 @@ void ILI9341_RestoreBus(void)
 
 static void ILI9341_REG_Config ( void )
 {
-  lcdid = ILI9341_ReadID();
+  lcdid = LCDID_ST7789V; /* 3.2-inch module on this board */
   
   if(lcdid == LCDID_ILI9341)
   {
@@ -613,7 +613,7 @@ void ILI9341_Init ( void )
 	ILI9341_GPIO_Config ();
 	ILI9341_FSMC_Config ();
 	
-	ILI9341_BackLed_Control ( ENABLE );      //点亮LCD背光灯
+	ILI9341_BackLed_Control ( DISABLE );     //点亮LCD背光灯
 	ILI9341_Rst ();
 	ILI9341_REG_Config ();
 	

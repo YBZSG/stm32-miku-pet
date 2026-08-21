@@ -1,4 +1,7 @@
 #include "./pet/pet_player.h"
+#include "./sensor/mq135.h"
+#include "./sensor/dht.h"
+#include "./sensor/mpu6050.h"
 #include "./flash/bsp_spi_flash.h"
 #include "./lcd/bsp_ili9341_lcd.h"
 #include "./usart/bsp_usart.h"
@@ -188,6 +191,24 @@ void PetPlayer_SetMode(DashboardMode mode)
     }
 }
 
+void PetPlayer_RefreshAirPage(void)
+{
+    if (s_dashboard_mode == DASHBOARD_MODE_AIR)
+        s_dashboard_dirty = 1;
+}
+
+void PetPlayer_RefreshDHTPage(void)
+{
+    if (s_dashboard_mode == DASHBOARD_MODE_DHT)
+        s_dashboard_dirty = 1;
+}
+
+void PetPlayer_RefreshMPUPage(void)
+{
+    if (s_dashboard_mode == DASHBOARD_MODE_MPU)
+        s_dashboard_dirty = 1;
+}
+
 void PetPlayer_PlayVoice(uint8_t voice_id)
 {
     if (voice_id <= 4) {
@@ -224,14 +245,26 @@ static void DrawDashboard(void)
     LCD_SetBackColor(0xF7BE);
     LCD_SetTextColor(0x2104);
     
-    /* If mode switched, wipe the old bottom area once to guarantee zero residual text */
-    if (s_dashboard_mode != s_last_drawn_mode) {
-        s_last_drawn_mode = s_dashboard_mode;
-        ILI9341_Clear(0, 232, LCD_X_LENGTH, 88);
-    }
-    
     /* Top Bar: y = 6, 30, 54 */
-    if (s_dashboard_mode == DASHBOARD_MODE_WEATHER) {
+    if (s_dashboard_mode == DASHBOARD_MODE_MPU) {
+        ILI9341_DispString_EN(8, 6, "MPU6050 MOTION  ");
+        sprintf(line, "STATUS: %-17s", MPU6050_IsValid() ? "READY" : "NO DATA");
+        ILI9341_DispString_EN(8, 30, line);
+        sprintf(line, "GESTURE: %-16s", MPU6050_GetGesture());
+        ILI9341_DispString_EN(8, 54, line);
+    } else if (s_dashboard_mode == DASHBOARD_MODE_DHT) {
+        ILI9341_DispString_EN(8, 6, "TEMP & HUMIDITY  ");
+        sprintf(line, "SENSOR: %-17s", DHT_GetModel());
+        ILI9341_DispString_EN(8, 30, line);
+        sprintf(line, "STATUS: %-17s", DHT_GetStatus());
+        ILI9341_DispString_EN(8, 54, line);
+    } else if (s_dashboard_mode == DASHBOARD_MODE_AIR) {
+        ILI9341_DispString_EN(8, 6, "AIR QUALITY  ");
+        sprintf(line, "STATUS: %-18s", MQ135_IsWarmingUp() ? "CALIBRATING" : "READY");
+        ILI9341_DispString_EN(8, 30, line);
+        sprintf(line, "LEVEL:  %-18s", MQ135_GetLevel());
+        ILI9341_DispString_EN(8, 54, line);
+    } else if (s_dashboard_mode == DASHBOARD_MODE_WEATHER) {
         ILI9341_DispString_EN(8, 6, "DESK CLOCK  ");
         sprintf(line, "DATE: %-18s", s_weather_date);
         ILI9341_DispString_EN(8, 30, line);
@@ -271,7 +304,40 @@ static void DrawDashboard(void)
     DrawWifiBadge();
 
     /* Bottom Bar: strictly unified at y = 238, 262, 286 */
-    if (s_dashboard_mode == DASHBOARD_MODE_WEATHER) {
+    if (s_dashboard_mode == DASHBOARD_MODE_MPU) {
+        sprintf(line, "ACC:%+5d %+5d %+5dmg", MPU6050_GetAccelXmg(), MPU6050_GetAccelYmg(), MPU6050_GetAccelZmg());
+        ILI9341_DispString_EN(8, 238, line);
+        sprintf(line, "GYR:%+4d %+4d %+4ddps", MPU6050_GetGyroX10()/10, MPU6050_GetGyroY10()/10, MPU6050_GetGyroZ10()/10);
+        ILI9341_DispString_EN(8, 262, line);
+        sprintf(line, "PITCH:%+4d.%u ROLL:%+4d.%u", MPU6050_GetPitch10()/10, (uint16_t)(MPU6050_GetPitch10()<0?-MPU6050_GetPitch10():MPU6050_GetPitch10())%10U, MPU6050_GetRoll10()/10, (uint16_t)(MPU6050_GetRoll10()<0?-MPU6050_GetRoll10():MPU6050_GetRoll10())%10U);
+        ILI9341_DispString_EN(8, 286, line);
+    } else if (s_dashboard_mode == DASHBOARD_MODE_DHT) {
+        if (DHT_IsValid()) {
+            int16_t temp10 = DHT_GetTemperature10();
+            uint16_t hum10 = DHT_GetHumidity10();
+            char sign = temp10 < 0 ? '-' : '+';
+            uint16_t temp_abs = (uint16_t)(temp10 < 0 ? -temp10 : temp10);
+            sprintf(line, "TEMPERATURE: %c%u.%u C      ", sign, temp_abs / 10U, temp_abs % 10U);
+            ILI9341_DispString_EN(8, 238, line);
+            sprintf(line, "HUMIDITY:    %u.%u %%RH     ", hum10 / 10U, hum10 % 10U);
+            ILI9341_DispString_EN(8, 262, line);
+            ILI9341_DispString_EN(8, 286, "UPDATED EVERY 2.5 SECONDS   ");
+        } else {
+            ILI9341_DispString_EN(8, 238, "TEMPERATURE: --.- C         ");
+            ILI9341_DispString_EN(8, 262, "HUMIDITY:    --.- %RH       ");
+            ILI9341_DispString_EN(8, 286, "CHECK DHT1 ON PB8           ");
+        }
+    } else if (s_dashboard_mode == DASHBOARD_MODE_AIR) {
+        uint16_t raw = MQ135_GetRaw();
+        uint16_t baseline = MQ135_GetBaseline();
+        int16_t delta = (int16_t)raw - (int16_t)baseline;
+        sprintf(line, "RAW:%-4u  BASE:%-4u       ", raw, baseline);
+        ILI9341_DispString_EN(8, 238, line);
+        sprintf(line, "VOLT:%-4umV DELTA:%+5d   ", MQ135_GetMillivolts(), delta);
+        ILI9341_DispString_EN(8, 262, line);
+        sprintf(line, "QUALITY:%3u%% RELATIVE    ", MQ135_GetQuality());
+        ILI9341_DispString_EN(8, 286, line);
+    } else if (s_dashboard_mode == DASHBOARD_MODE_WEATHER) {
         sprintf(line, "WEATHER: %-19s", s_weather_info);
         ILI9341_DispString_EN_CH(8, 238, line);
         sprintf(line, "STATUS:  %-19s", s_weather_tip);
@@ -371,8 +437,9 @@ static void LanguageKey_Poll(void)
         if (count2 < 3) count2++;
         else if (!key2_pressed) {
             key2_pressed = 1;
-            /* KEY2: Cycle Dashboard Modes (AI -> Clock/Weather -> Memo -> Geek) */
-            s_dashboard_mode = (DashboardMode)((s_dashboard_mode % 4) + 1);
+            /* KEY2: AI -> Clock -> Memo -> Geek -> Air -> Temperature/Humidity */
+            s_dashboard_mode = (DashboardMode)((s_dashboard_mode % 7) + 1);
+            printf("MODE %u\r\n", (uint8_t)s_dashboard_mode);
             s_dashboard_dirty = 1;
             s_state_changed = 1;
         }
@@ -598,33 +665,57 @@ void PetPlayer_ApplyDashboardFrame(const uint8_t *frame)
             s_state_changed = 1;
         }
         return;
+    } else if (mode == 7) {
+        uint8_t requested_mode = frame[12];
+        if (requested_mode >= DASHBOARD_MODE_AI && requested_mode <= DASHBOARD_MODE_MPU) {
+            s_dashboard_mode = (DashboardMode)requested_mode;
+            s_dashboard_dirty = 1;
+            s_state_changed = 1;
+            printf("MODE %u\r\n", requested_mode);
+        }
+        return;
     } else if (mode == 2) {
-        s_dashboard_mode = DASHBOARD_MODE_WEATHER;
         memcpy(s_weather_date, frame + 12, 10); s_weather_date[10] = 0;
         memcpy(s_weather_time, frame + 22, 8);  s_weather_time[8] = 0;
         memcpy(s_weather_info, frame + 30, 14); s_weather_info[14] = 0;
         memcpy(s_weather_tip,  frame + 44, 14); s_weather_tip[14] = 0;
     } else if (mode == 3) {
-        s_dashboard_mode = DASHBOARD_MODE_MESSAGE;
         memcpy(s_memo_sender, frame + 12, 8);  s_memo_sender[8] = 0;
         memcpy(s_memo_text1,  frame + 20, 20); s_memo_text1[20] = 0;
         memcpy(s_memo_text2,  frame + 40, 18); s_memo_text2[18] = 0;
     } else if (mode == 4) {
-        s_dashboard_mode = DASHBOARD_MODE_GEEK;
         s_pomo_seconds = ReadU32(frame + 12);
         s_geek_commits = ReadU32(frame + 16);
         s_geek_stars   = ReadU32(frame + 20);
+    } else if (mode == 6) {
+        /* Air measurements are local; this frame only keeps protocol symmetry. */
+    } else if (mode == 8) {
+        /* DHT11 measurements are local; this frame selects the local page. */
+    } else if (mode == 9) {
+        /* MPU6050 measurements are local; this frame selects the motion page. */
     } else {
         uint8_t title_len = frame[21];
         if (title_len > 36U) title_len = 36U;
-        s_dashboard_mode = DASHBOARD_MODE_AI;
         s_total_tokens = ReadU32(frame + 12);
-        s_remaining_percent = frame[16] > 100U ? 100U : frame[16];
+        s_remaining_percent = frame[16] > 100U ? 0U : frame[16];
         s_reset_minutes = ReadU32(frame + 17);
         for (i = 0; i < title_len && i < sizeof(s_session_title) - 1U; i++)
             s_session_title[i] = (char)frame[22 + i];
         s_session_title[i] = 0;
-        s_usage_valid = 1;
+        s_usage_valid = frame[16] <= 100U;
+    }
+    /* Web-selected pages use an atomic marker inside the data frame, avoiding
+       UDP reordering between a data packet and a separate mode command. */
+    if (frame[57] == 0xD7U) {
+        if (mode >= 1U && mode <= 4U)
+            s_dashboard_mode = (DashboardMode)mode;
+        else if (mode == 6U)
+            s_dashboard_mode = DASHBOARD_MODE_AIR;
+        else if (mode == 8U)
+            s_dashboard_mode = DASHBOARD_MODE_DHT;
+        else if (mode == 9U)
+            s_dashboard_mode = DASHBOARD_MODE_MPU;
+        printf("MODE %u\r\n", (uint8_t)s_dashboard_mode);
     }
     s_dashboard_dirty = 1;
 }
@@ -698,7 +789,6 @@ void PetPlayer_PollSerial(void)
                     s_remaining_percent = values[2] > 100 ? 100 : (uint8_t)values[2];
                     s_reset_minutes = values[3];
                     s_usage_valid = 1;
-                    s_dashboard_mode = DASHBOARD_MODE_AI;
                     s_dashboard_dirty = 1;
                     s_state_changed = 1;
                     printf("DASHBOARD_OK %lu %lu %lu %lu\r\n",
@@ -759,9 +849,22 @@ void PetPlayer_Update(void)
     uint16_t duration = 90;
     uint8_t touch_divider = 0;
     uint8_t absolute_frame;
-    if (!s_ready) return;
+    if (!s_ready) {
+        ESP8266_DashboardPoll();
+        PetPlayer_PollSerial();
+        Delay_ms(1);
+        return;
+    }
 
     s_state_changed = 0;
+
+    /* Clear before rendering the animation when changing pages. Clearing only
+       the text bands left wrapped Chinese glyphs in the middle area. */
+    if (s_dashboard_mode != s_last_drawn_mode) {
+        s_last_drawn_mode = s_dashboard_mode;
+        ILI9341_Clear(0, 0, LCD_X_LENGTH, LCD_Y_LENGTH);
+        s_dashboard_dirty = 1;
+    }
 
     if (s_state == PET_WORKING)
         absolute_frame = (s_facing_left ? 15U : 7U) + s_frame;
